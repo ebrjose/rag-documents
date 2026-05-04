@@ -1,0 +1,21 @@
+[project]
+name = "rag-da"
+version = "0.1.0"
+description = "RAG sobre disposiciones administrativas (MVP, local-only)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.118",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.7",
+    "python-multipart>=0.0.20",
+    "httpx>=0.28",
+    "psycopg[binary,pool]>=3.2",
+    "qdrant-client[fastembed]>=1.12",
+    "pymupdf>=1.25",
+    "python-dotenv>=1.0",
+    "structlog>=25.1",
+]
+
+[tool.uv]
+package = false

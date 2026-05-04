@@ -89,7 +89,7 @@ Persona técnica o semi-técnica de la organización que conoce el contenido de 
 ### R-6. Operación local
 
 - **R-6.1.** El sistema **debe** funcionar sin depender de APIs externas de pago. Todos los modelos (embeddings y LLM) se ejecutan localmente.
-- **R-6.2.** El backend **debe** poder consumir un servicio Ollama remoto a través de su URL configurable (para usar la RTX 5090 desde la máquina del usuario).
+- **R-6.2.** El backend **debe** consumir Ollama a través de una URL configurable, soportando tanto Ollama local (mismo host) como remoto en LAN. En el setup actual, backend, Qdrant y Ollama corren en la misma máquina (`homelab`, RTX 5090 32 GB).
 
 ### R-7. Manejo de PDFs escaneados
 
@@ -133,7 +133,7 @@ El MVP se considera **validado** cuando, con un conjunto de **20–30 disposicio
 
 ## 8. Restricciones y supuestos
 
-- **Hardware disponible**: máquina con RTX 5090 (32 GB VRAM) accesible por red local.
+- **Hardware disponible**: máquina `homelab` con RTX 5090 (32 GB VRAM) que aloja Ollama y el backend en el mismo host (sin LAN intermedia para el MVP).
 - **Idioma del corpus**: principalmente español.
 - **Idioma de la interfaz y respuestas**: español.
 - **Volumen del MVP**: decenas de documentos, no miles. El corpus completo (~2,300 DAs) se indexará en una fase posterior.

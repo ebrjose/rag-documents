@@ -19,7 +19,8 @@ Produccion no debe cambiar los criterios basicos del sistema:
 
 - Servidor con NVIDIA L40S de 48 GB VRAM.
 - Ollama o runtime equivalente accesible por LAN desde el backend.
-- Almacenamiento persistente para Qdrant, catalogo SQLite/PostgreSQL futuro, PDFs originales y artefactos de indexacion.
+- Postgres y Qdrant como servicios Docker (mismo modelo de despliegue que el MVP, ADR-002 y ADR-009). Volumenes persistentes en almacenamiento local del servidor productivo.
+- Almacenamiento persistente para Qdrant, catalogo Postgres, PDFs originales y artefactos de indexacion.
 
 ### Modelos recomendados
 

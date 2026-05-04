@@ -13,22 +13,34 @@
 └────────────────┬────────────────────┘
                  │ HTTP/JSON + SSE (contrato fijo)
                  ▼
-┌─────────────────────────────────────┐
-│  Backend FastAPI                    │
-│  - Documents API                    │
-│  - Chat API (SSE)                   │
-│  - Health                           │
-└──┬───────────┬───────────┬──────────┘
-   │           │           │
-   ▼           ▼           ▼
-┌────────┐  ┌────────┐  ┌──────────────┐
-│ Qdrant │  │ SQLite │  │ Ollama (LAN) │ ← RTX 5090
-│ local  │  │ catálo │  │  - Embeddings│
-│ (vec)  │  │ go doc │  │  - LLM       │
-└────────┘  └────────┘  └──────────────┘
+┌────────────────────────────────────────────────────────────┐
+│  homelab — RTX 5090 (32 GB VRAM)                           │
+│                                                            │
+│  ┌─────────────────────────────────────┐                   │
+│  │  Backend FastAPI (host)             │                   │
+│  │  - Documents API                    │                   │
+│  │  - Chat API (SSE)                   │                   │
+│  │  - Health                           │                   │
+│  └──┬───────────┬───────────┬──────────┘                   │
+│     │           │           │                              │
+│     ▼           ▼           ▼                              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────────────┐            │
+│  │ Postgres │ │ Qdrant   │ │ Ollama (host)    │            │
+│  │ Docker   │ │ Docker   │ │  localhost:11434 │            │
+│  │ :5432    │ │ :6333    │ │  - Embeddings    │            │
+│  │          │ │          │ │  - LLM           │            │
+│  └────┬─────┘ └────┬─────┘ └──────────────────┘            │
+│       │            │                                       │
+│       ▼            ▼                                       │
+│   ./volumes/   ./volumes/                                  │
+│   postgres/    qdrant/                                     │
+│                                                            │
+│  ./volumes/uploads/  (PDFs originales — montable           │
+│                       cuando el backend se dockerice)      │
+└────────────────────────────────────────────────────────────┘
 ```
 
-Backend FastAPI único. Qdrant en modo embebido (vectores). SQLite (catálogo de documentos y estados). Ollama en la máquina con la RTX 5090, accesible por LAN. Frontend React desacoplado: solo consume la API HTTP.
+Backend FastAPI corriendo en el host (por ahora). Postgres y Qdrant como servicios Docker orquestados por `docker-compose.yml` en la raíz, con datos persistidos en `./volumes/`. Ollama se queda en el host para mantener acceso directo a la RTX 5090 sin pasar por NVIDIA Container Toolkit. La URL de Ollama es configurable (R-6.2); las URLs de Postgres y Qdrant también, para soportar mover servicios entre hosts en el futuro. Frontend React desacoplado: solo consume la API HTTP.
 
 **Enfoque de desarrollo: API-first.** El contrato HTTP se define antes de implementar back o front. Frontend se construye contra mocks; backend cumple el contrato. Detalles en ADR-013.
 
@@ -42,11 +54,13 @@ Backend FastAPI único. Qdrant en modo embebido (vectores). SQLite (catálogo de
 | Paquetes | uv | Rápido, lockfile claro, ya en uso |
 | Web framework | FastAPI | Async nativo, OpenAPI gratis, SSE simple |
 | ASGI | uvicorn | Estándar |
-| Vector store | Qdrant embebido | Hybrid search RRF nativo, mismo API local/remoto |
+| Vector store | Qdrant (servicio Docker) | Hybrid search RRF nativo (ADR-002) |
 | Cliente Qdrant | qdrant-client[fastembed] | Soporte oficial, BM25 vía FastEmbed |
-| Catálogo | SQLite (stdlib) | Estado de documentos, sin servidor (ADR-009) |
+| Catálogo | Postgres 16 (servicio Docker) | Estado de documentos, esquema relacional explícito (ADR-009) |
+| Cliente Postgres | psycopg 3 (`psycopg[binary]`) | Driver moderno, soporte sync y async |
+| Orquestación servicios | docker-compose | Postgres + Qdrant; Ollama queda en host |
 | Parsing PDF | PyMuPDF (`pymupdf`) | Mejor que pypdf, preserva páginas |
-| Embeddings + LLM | Ollama (REST) → modelos TBD | Local, en RTX 5090 |
+| Embeddings + LLM | Ollama (REST) → modelos en §13 | Mismo host, RTX 5090 32 GB |
 | Cliente Ollama | httpx | Sin SDK; control total sobre streaming |
 | Validación | Pydantic v2 | Estándar FastAPI |
 | Logging | stdlib + structlog | Sin overkill |
@@ -73,9 +87,9 @@ Backend FastAPI único. Qdrant en modo embebido (vectores). SQLite (catálogo de
 
 ### Pendiente decidir (TBD, Fase 0)
 
-- Modelo de embeddings (candidatos: `bge-m3`, `nomic-embed-text`, `multilingual-e5`).
-- Modelo LLM (candidatos: `gpt-oss-20b`, `qwen2.5:14b`, `gemma`-verificar).
-- Política de duplicados (rechazar vs reemplazar) — ADR-008 propone rechazar.
+- **Modelo de embeddings**: alinear con `production.md` → `qwen3-embedding:4b` (ya descargado en `homelab`). Confirmar en F0.1.
+- **Modelo LLM**: `gpt-oss:20b` vs `gemma4:31b` (ambos descargados en `homelab`). Decisión en F0.2.
+- **Política de duplicados** (rechazar vs reemplazar) — ADR-008 propone rechazar.
 
 ## 3. Decisiones de arquitectura (ADRs)
 
@@ -84,10 +98,10 @@ Backend FastAPI único. Qdrant en modo embebido (vectores). SQLite (catálogo de
 **Decisión.** Backend FastAPI expone HTTP/JSON+SSE. Frontend React lo consume.
 **Consecuencias.** Contratos testables, cualquier cliente (Postman, CLI) puede usar la API. CORS necesario en dev.
 
-### ADR-002: Qdrant embebido en lugar de servicio Docker
-**Contexto.** MVP local; Docker añade fricción.
-**Decisión.** Qdrant embebido con persistencia en `data/qdrant/`. API idéntica a Qdrant remoto.
-**Consecuencias.** Migrar a Qdrant servicio en el futuro = cambiar el constructor. Cero impacto en el resto.
+### ADR-002: Qdrant como servicio Docker
+**Contexto.** El stack de persistencia ya incluye Postgres en Docker (ADR-009); mantener un solo modo de despliegue para todos los servicios stateful simplifica operación y backups. Qdrant embebido se descartó tras esta decisión.
+**Decisión.** Qdrant corre como servicio Docker (imagen oficial `qdrant/qdrant`) con datos persistidos en `./volumes/qdrant/`. Backend se conecta vía HTTP a `localhost:6333`. URL configurable.
+**Consecuencias.** Hace falta `docker-compose up` antes de arrancar el backend (healthcheck en `/api/health` cubre el caso). Migrar a Qdrant en otro host = cambiar `QDRANT_URL`. Backups = snapshot del directorio `./volumes/qdrant/` con servicio detenido.
 
 ### ADR-003: Hybrid Search (Dense 70% + Sparse 30%)
 **Contexto.** Las DAs tienen vocabulario técnico-legal, números de norma, fechas exactas. Búsqueda semántica pura falla con identificadores.
@@ -119,10 +133,10 @@ Backend FastAPI único. Qdrant en modo embebido (vectores). SQLite (catálogo de
 **Decisión.** SHA-256 del binario al subir. Si existe, **rechazar** con mensaje claro (eliminar primero si quieres re-indexar).
 **Consecuencias.** Hash guardado como metadata. Política revisable cuando llegue versionado.
 
-### ADR-009: SQLite para catálogo de documentos (Qdrant + SQLite, no solo Qdrant)
-**Contexto.** Qdrant guarda chunks; el catálogo de documentos tiene estados (`pending`, `processing`, `error`, `requires_ocr`) que existen *antes* de que haya chunks.
-**Decisión.** SQLite (un archivo, en stdlib) para catálogo de documentos. Qdrant solo para vectores+metadata de chunk.
-**Consecuencias.** Dos stores que mantener consistentes (transacciones lógicas). Listar documentos, dedupe por hash y estados intermedios son triviales en SQL. Postgres si crece a multi-usuario.
+### ADR-009: Postgres para catálogo de documentos (Qdrant + Postgres)
+**Contexto.** Qdrant guarda chunks; el catálogo de documentos tiene estados (`pending`, `processing`, `error`, `requires_ocr`) que existen *antes* de que haya chunks. Inicialmente se consideró SQLite por simplicidad, pero al adoptar Docker para Qdrant tiene sentido alinear todo el stack stateful en el mismo modelo de despliegue (un solo `docker-compose up`, mismas convenciones de backup, mismo runtime productivo).
+**Decisión.** Postgres 16 como servicio Docker (imagen `postgres:16-alpine`) con datos en `./volumes/postgres/`. Qdrant solo para vectores+metadata de chunk. Cliente: `psycopg[binary]>=3`.
+**Consecuencias.** Dos stores que mantener consistentes (transacciones lógicas — Postgres + upsert Qdrant; rollback manual si falla el upsert). Listar, dedupe por hash y estados intermedios siguen triviales en SQL. Multi-usuario y crecimiento del corpus completo (~2,300 DAs) ya cubiertos sin migración. Costo: requiere Docker corriendo desde el primer día del MVP.
 
 ### ADR-010: TanStack Table headless en lugar de un sistema de diseño completo
 **Contexto.** Sistemas como shadcn, Mantine, MUI traen estética propia que pelea con la dirección "minimalismo Apple".
@@ -146,15 +160,17 @@ Backend FastAPI único. Qdrant en modo embebido (vectores). SQLite (catálogo de
 
 ## 4. Modelo de datos
 
-### Catálogo de documentos (SQLite)
+### Catálogo de documentos (Postgres)
 
 ```sql
 CREATE TABLE documents (
-    document_id    TEXT PRIMARY KEY,        -- uuid4
+    document_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     filename       TEXT NOT NULL,
     sha256         TEXT UNIQUE NOT NULL,
-    status         TEXT NOT NULL,           -- pending|processing|indexed|error|requires_ocr
-    uploaded_at    DATETIME NOT NULL,
+    status         TEXT NOT NULL CHECK (status IN (
+                       'pending','processing','indexed','error','requires_ocr'
+                   )),
+    uploaded_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     page_count     INTEGER,
     chunk_count    INTEGER,
     storage_path   TEXT NOT NULL,
@@ -163,6 +179,8 @@ CREATE TABLE documents (
 CREATE INDEX idx_documents_status ON documents(status);
 CREATE INDEX idx_documents_sha256 ON documents(sha256);
 ```
+
+`gen_random_uuid()` requiere la extensión `pgcrypto` (o usar UUID generado por la app). Migración inicial vía script idempotente o herramienta tipo Alembic — para MVP basta con un `init.sql` montado en `/docker-entrypoint-initdb.d/` del contenedor Postgres.
 
 ### Chunk (Qdrant)
 
@@ -303,20 +321,20 @@ El contrato completo (incluyendo errores HTTP, content-types, ejemplos JSON, eve
 `.env` cargado vía `pydantic-settings`:
 
 ```
-# Ollama
-OLLAMA_BASE_URL=http://<ip-rtx5090>:11434
-OLLAMA_LLM_MODEL=<TBD>
-OLLAMA_EMBED_MODEL=<TBD>
+# Ollama (mismo host en este setup; URL configurable para futuro deployment LAN)
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_LLM_MODEL=gpt-oss:20b   # o gemma4:31b — TBD F0.2
+OLLAMA_EMBED_MODEL=qwen3-embedding:4b
 
-# Qdrant
-QDRANT_PATH=./data/qdrant
+# Postgres (servicio Docker, ADR-009)
+DATABASE_URL=postgresql+psycopg://rag:rag@localhost:5432/rag_da
+
+# Qdrant (servicio Docker, ADR-002)
+QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=disposiciones
 
-# SQLite
-CATALOG_DB_PATH=./data/catalog.db
-
-# Storage
-UPLOADS_DIR=./data/uploads
+# Storage local (PDFs originales — montable como volumen cuando el backend se dockerice)
+UPLOADS_DIR=./volumes/uploads
 
 # Chunking
 CHUNK_TARGET_TOKENS=500
@@ -387,17 +405,21 @@ rag-da/
 │       │   ├── runtime.ts      # adapter assistant-ui ↔ /api/chat
 │       │   └── query.ts        # TanStack Query setup
 │       └── types.ts            # tipos espejo de Pydantic
-├── data/                       # gitignored
-│   ├── qdrant/
-│   ├── uploads/
-│   └── catalog.db
+├── volumes/                    # gitignored — bind mounts de docker-compose
+│   ├── postgres/               # datos de Postgres
+│   ├── qdrant/                 # storage de Qdrant
+│   └── uploads/                # PDFs originales (también accedidos por el backend en host)
+├── docker/
+│   └── postgres/init.sql       # esquema inicial (montado en /docker-entrypoint-initdb.d/)
 ├── specs/
 │   ├── requirements.md
 │   ├── design.md
 │   ├── api.md                  # contrato completo (ADR-013)
+│   ├── production.md
 │   └── tasks.md
 ├── docs/
 ├── scripts/
+├── docker-compose.yml          # Postgres + Qdrant
 ├── .env.example
 ├── pyproject.toml
 └── README.md
@@ -437,7 +459,7 @@ Header fijo con dos enlaces de navegación: **Documentos** · **Chat**. Logo/tí
 | Requisito | Cubierto por |
 |---|---|
 | R-1 (Carga) | `POST /api/documents`, react-dropzone en pantalla Documentos, ADR-008 (dedup) |
-| R-2 (Procesamiento) | Pipeline §5, ADR-003 (hybrid), ADR-009 (catálogo) |
+| R-2 (Procesamiento) | Pipeline §5, ADR-003 (hybrid), ADR-009 (catálogo Postgres) |
 | R-3 (Pantalla Documentos) | §10 Pantalla 1, ADR-010 (TanStack Table), `GET/DELETE /api/documents` |
 | R-4 (Pantalla Chat) | §10 Pantalla 2, ADR-011 (assistant-ui), `POST /api/chat` SSE |
 | R-5 (Citas) | Payload chunks §4, evento SSE `citations`, endpoint `/file` |
@@ -455,13 +477,16 @@ Header fijo con dos enlaces de navegación: **Documentos** · **Chat**. Logo/tí
 | Hybrid search no basta sin reranking | Aceptar; validar con usuario | Cross-encoder en Fase 2 |
 | Modelo LLM local alucina pese a prompt | Prompt estricto + comparar 2 modelos | Reranker + adjacent chunks |
 | PDFs escaneados = mayoría real | Detectar y reportar | OCR en Fase 2 |
-| RTX 5090 no accesible | Healthcheck visible en UI | Fallback opcional |
-| Qdrant embebido se corrompe | Backups del directorio | Migrar a servicio Docker |
+| Ollama caído o sin respuesta | Healthcheck `/api/health` visible en UI | Reiniciar servicio Ollama |
+| Presión de VRAM en mismo host (chat 20 GB + embeddings 2.5 GB + KV cache + Qdrant + backend) | Pipeline ya serializa indexación 1 doc a la vez (§5); `OLLAMA_KEEP_ALIVE` corto para descargar modelo no usado entre chat e ingesta | Mover Ollama a host dedicado (configurable por R-6.2) |
+| Servicio Docker (Postgres/Qdrant) caído | Healthcheck `/api/health` pinga ambos; `docker compose ps` para diagnóstico | `docker compose restart` |
+| Pérdida de `./volumes/` | Backups periódicos del directorio (rsync/tar) — Postgres con `pg_dump` antes de detener | Restaurar desde backup |
+| Inconsistencia Postgres ↔ Qdrant (upsert falla a mitad) | Marcar `status=error` en Postgres si falla upsert; reintentar borrando puntos huérfanos | Job de reconciliación post-MVP |
 | Contrato API mal diseñado (riesgo API-first) | Spike mental ya hecho §5-6; iterable antes de Fase 3 | Revisión al final de Fase 2 |
 | `assistant-ui` API breaking change | Adapter aislado en `lib/runtime.ts` | Cambio puntual sin tocar resto |
 
 ## 13. Decisiones pendientes (bloqueantes antes de codear backend)
 
-1. **Modelo de embeddings**: `bge-m3` vs `nomic-embed-text` vs `multilingual-e5`.
-2. **Modelo LLM**: `gpt-oss-20b` vs `qwen2.5:14b` vs `gemma`.
+1. **Modelo de embeddings**: propuesta → `qwen3-embedding:4b` (ya descargado en `homelab`, alineado con `production.md` para evitar reindexar al pasar a producción). Confirmar en F0.1 con prueba de tiempo de embedding sobre 10 párrafos.
+2. **Modelo LLM**: `gpt-oss:20b` (≈13 GB MXFP4) vs `gemma4:31b` (≈20 GB Q4_K_M). Ambos caben en 32 GB de la RTX 5090; ambos están descargados. Decisión en F0.2 con preguntas de muestra.
 3. **Política de duplicados**: ADR-008 propone rechazar (confirmar).

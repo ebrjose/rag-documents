@@ -1,5 +1,6 @@
 # ── Data (never commit) ──
 data/
+volumes/
 administrative_regulations/
 documents_administrative_regulation.csv
 docs/Designing*.html

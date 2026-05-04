@@ -8,16 +8,18 @@
 
 **Objetivo.** Resolver TBDs del `design.md` y dejar el proyecto listo.
 
-- [ ] **0.1** Decidir modelo de embeddings. Probar 1–2 candidatos en Ollama; medir tiempo de embedding sobre 10 párrafos en español.
-- [ ] **0.2** Decidir modelo LLM. Probar 1–2 candidatos con preguntas de muestra contra texto pegado a mano (sin RAG todavía).
-- [ ] **0.3** Verificar que Ollama en la RTX 5090 es accesible: `curl http://<ip>:11434/api/tags`.
+- [ ] **0.1** Confirmar modelo de embeddings → `qwen3-embedding:4b` (ya descargado en `homelab`, alineado con `production.md`). Medir tiempo de embedding sobre 10 párrafos en español como sanity check.
+- [ ] **0.2** Decidir modelo LLM entre `gpt-oss:20b` y `gemma4:31b` (ambos descargados en `homelab`). Probar con preguntas de muestra contra texto pegado a mano (sin RAG todavía).
+- [x] **0.3** Ollama accesible en `homelab` (mismo host que el backend): `curl http://localhost:11434/api/tags` responde con los modelos descargados.
 - [ ] **0.4** Confirmar política de duplicados (ADR-008: rechazar).
-- [ ] **0.5** Inicializar `pyproject.toml` con dependencias backend (FastAPI, uvicorn, qdrant-client, pymupdf, httpx, pydantic-settings).
+- [ ] **0.5** Inicializar `pyproject.toml` con dependencias backend (FastAPI, uvicorn, qdrant-client[fastembed], pymupdf, httpx, pydantic-settings, **`psycopg[binary]>=3`**).
 - [ ] **0.6** Inicializar `frontend/` con Vite + React + TS (`npm create vite@latest frontend -- --template react-ts`).
 - [ ] **0.7** Crear `.env.example` (backend) y `frontend/.env.example` con todas las variables del `design.md` §8.
-- [ ] **0.8** `.gitignore` (data/, .venv, node_modules, dist, .env).
+- [ ] **0.8** `.gitignore` (`volumes/`, `.venv`, `node_modules`, `dist`, `.env`).
+- [ ] **0.9** Crear `docker-compose.yml` con servicios `postgres` (`postgres:16-alpine`, puerto 5432, volumen `./volumes/postgres`, healthcheck `pg_isready`) y `qdrant` (`qdrant/qdrant`, puertos 6333/6334, volumen `./volumes/qdrant`).
+- [ ] **0.10** Crear `docker/postgres/init.sql` con el esquema de `design.md` §4 + `CREATE EXTENSION IF NOT EXISTS pgcrypto;`. Montar en `/docker-entrypoint-initdb.d/` del servicio Postgres.
 
-**Verificable.** `uv sync` instala backend; `npm install` en `frontend/` no rompe; `curl <ollama>` responde.
+**Verificable.** `uv sync` instala backend; `npm install` en `frontend/` no rompe; `curl http://localhost:11434/api/tags` responde; `docker compose up -d` levanta Postgres + Qdrant; `psql $DATABASE_URL -c '\dt'` muestra `documents`; `curl http://localhost:6333/collections` responde.
 
 ---
 
@@ -96,8 +98,8 @@
 - [ ] **3.A.1** `backend/main.py`: FastAPI + CORSMiddleware (origin: `localhost:5173`) + lifespan.
 - [ ] **3.A.2** `backend/settings.py`: `pydantic-settings`.
 - [ ] **3.A.3** `backend/schemas.py`: modelos Pydantic exactos al contrato.
-- [ ] **3.A.4** `backend/core/catalog.py`: SQLite (crear tabla, CRUD de `documents`).
-- [ ] **3.A.5** `backend/core/store.py`: Qdrant embebido, crear collection `disposiciones` con vector denso + sparse.
+- [ ] **3.A.4** `backend/core/catalog.py`: cliente Postgres con `psycopg[binary]>=3` (pool de conexiones, CRUD de `documents`). Esquema ya creado por `init.sql`.
+- [ ] **3.A.5** `backend/core/store.py`: cliente Qdrant apuntando a `QDRANT_URL`; crear collection `disposiciones` con vector denso + sparse si no existe.
 - [ ] **3.A.6** `backend/core/ollama_client.py`: wrapper httpx (`embed`, `chat` streaming).
 
 ### 3.B — Pipeline RAG
