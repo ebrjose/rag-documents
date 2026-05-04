@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     """num_ctx para embeddings. Los textos a embeber son chunks (~500 tokens)
     y queries cortas, así que 2K es holgado y libera VRAM del KV cache."""
     ollama_temperature: float = 0.2
+    ollama_max_tokens: int = 4096
+    """Tope de tokens generados por respuesta. Evita que defaults bajos del
+    modelo trunquen respuestas detalladas."""
     ollama_embed_timeout_seconds: float = 120.0
     ollama_chat_timeout_seconds: float | None = None  # None = sin límite (streaming largo)
     ollama_ping_timeout_seconds: float = 5.0

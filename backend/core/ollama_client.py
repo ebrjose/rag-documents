@@ -60,6 +60,7 @@ def _chat_payload(
         "options": {
             "temperature": temperature if temperature is not None else settings.ollama_temperature,
             "num_ctx": settings.ollama_context_length,
+            "num_predict": settings.ollama_max_tokens,
         },
     }
 
