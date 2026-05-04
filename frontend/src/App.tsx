@@ -7,7 +7,7 @@ import { useTheme } from './lib/theme'
 type Page = 'documents' | 'chat'
 
 export default function App() {
-  const [page, setPage] = useState<Page>('documents')
+  const [page, setPage] = useState<Page>('chat')
   const { theme, toggle } = useTheme()
 
   useEffect(() => {
