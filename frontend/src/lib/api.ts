@@ -1,4 +1,4 @@
-import type { DocumentOut, UploadResponse } from '../types'
+import type { ChatApiMessage, DocumentOut, UploadResponse } from '../types'
 
 const BASE = ''
 
@@ -32,11 +32,15 @@ export interface ChatStreamHandlers {
   onError: (msg: string) => void
 }
 
-export async function streamChat(question: string, handlers: ChatStreamHandlers, signal?: AbortSignal) {
+export async function streamChat(
+  messages: ChatApiMessage[],
+  handlers: ChatStreamHandlers,
+  signal?: AbortSignal,
+) {
   const r = await fetch(`${BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ messages }),
     signal,
   })
   if (!r.ok || !r.body) {

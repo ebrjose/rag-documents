@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, FileText, Sparkles } from 'lucide-react'
-import type { Citation, DocumentOut } from '../types'
+import type { ChatApiMessage, Citation, DocumentOut } from '../types'
 import { fileUrl, listDocuments, streamChat } from '../lib/api'
 import { MarkdownContent } from '../components/MarkdownContent'
 
@@ -37,13 +37,22 @@ export function ChatPage() {
     if (!q || busy) return
     if (textOverride === undefined) setInput('')
     setBusy(true)
+
+    // Construye el historial para la API ANTES de mutar el estado: incluye
+    // todos los mensajes anteriores + la nueva pregunta. El placeholder del
+    // asistente streaming no se envía al backend.
+    const apiHistory: ChatApiMessage[] = [
+      ...messages.map((m) => ({ role: m.role, content: m.text })),
+      { role: 'user', content: q },
+    ]
+
     setMessages((m) => [
       ...m,
       { role: 'user', text: q },
       { role: 'assistant', text: '', citations: [], streaming: true },
     ])
     try {
-      await streamChat(q, {
+      await streamChat(apiHistory, {
         onToken: (t) =>
           setMessages((m) => {
             const next = [...m]

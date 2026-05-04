@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from backend.core import store
+from backend.core import catalog, ingest, scheduler, store
 from backend.routers import chat, documents, health
 from backend.settings import settings
 
@@ -17,7 +17,39 @@ log = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     store.ensure_collection()
+    _resume_orphan_ingests()
     yield
+
+
+def _resume_orphan_ingests() -> None:
+    """Reencola docs que quedaron en estados intermedios cuando el backend
+    cayó (por ejemplo crash, restart, o killing del scheduler in-flight).
+
+    Sin esto, esos docs quedan eternamente en `pending` / `processing` /
+    `ocr_processing`. El scheduler sólo se invoca en uploads, así que
+    necesitamos disparar manualmente al boot.
+
+    Para `processing`/`ocr_processing`: los volvemos a `pending` antes de
+    encolar. Si el doc ya tenía chunks parciales en Qdrant, el upsert por
+    id determinístico los sobreescribe — no hay duplicados.
+    """
+    rows = catalog.list_documents()
+    orphans = [
+        r for r in rows
+        if r["status"] in ("pending", "processing", "ocr_processing")
+    ]
+    if not orphans:
+        return
+    log.info("Reencolando %d docs huérfanos al startup", len(orphans))
+    for r in orphans:
+        if r["status"] != "pending":
+            catalog.update_status(r["document_id"], "pending")
+        scheduler.schedule_ingest(
+            ingest.process_document,
+            r["document_id"],
+            r["storage_path"],
+            r["filename"],
+        )
 
 
 app = FastAPI(title="RAG-DA Backend", version="0.1.0", lifespan=lifespan)

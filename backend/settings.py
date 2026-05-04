@@ -66,6 +66,15 @@ class Settings(BaseSettings):
     sparse_weight: float = 0.3
     retrieval_prefetch_multiplier: int = 4
 
+    # ── Conversación ─────────────────────────────────────────────────────
+    query_rewriting_enabled: bool = True
+    """Si está activo y hay historial previo, reformula la pregunta del
+    usuario en una versión autocontenida antes del retrieval. Mejora
+    follow-ups tipo `¿y para Europa?` a costa de una llamada extra al LLM."""
+    rewrite_history_limit: int = 6
+    """Cuántos mensajes previos pasar al rewriter. Más historia = mejor
+    contexto pero más tokens y latencia."""
+
     # ── Concurrencia ─────────────────────────────────────────────────────
     embed_concurrency: int = 4
     """Máx. requests simultáneas a Ollama /api/embeddings dentro de un doc.

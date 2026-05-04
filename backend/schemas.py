@@ -33,8 +33,15 @@ class UploadResponse(BaseModel):
     results: list[UploadResult]
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class ChatRequest(BaseModel):
-    question: str
+    messages: list[ChatMessage]
+    """Historial completo de la conversación. El último mensaje debe ser del
+    usuario y es la pregunta a responder."""
     top_k: int | None = None
 
 

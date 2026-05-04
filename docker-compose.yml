@@ -29,6 +29,12 @@ services:
       - ./volumes/qdrant:/qdrant/storage
     environment:
       QDRANT__LOG_LEVEL: INFO
+    # RocksDB abre muchos file descriptors por segmento. El default 1024
+    # se queda corto bajo carga de ingesta concurrente.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
 
   # ── App en modo dev (perfil `app`: hot-reload, dos servicios separados) ──
 

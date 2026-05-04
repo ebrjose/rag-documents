@@ -36,3 +36,8 @@ export interface Citation {
   filename: string
   page: number
 }
+
+export interface ChatApiMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
