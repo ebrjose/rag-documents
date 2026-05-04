@@ -1,0 +1,53 @@
+# ── Data (never commit) ──
+data/
+administrative_regulations/
+documents_administrative_regulation.csv
+docs/Designing*.html
+docs/Designing*.pdf
+docs/assets/
+
+# ── Python ──
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.python-version
+
+# ── uv ──
+# uv.lock se commitea (lockfile reproducible)
+
+# ── Node / Vite ──
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# ── Env ──
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# ── IDE / OS ──
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ── Claude Code ──
+.claude/settings.local.json
+
+# ── Scripts (outputs, no fuentes) ──
+scripts/invalid_pdfs.txt
+
+# ── Logs ──
+*.log
+logs/
