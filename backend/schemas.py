@@ -4,13 +4,18 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
-DocumentStatus = Literal["pending", "processing", "indexed", "error", "requires_ocr"]
+DocumentStatus = Literal[
+    "pending", "processing", "ocr_processing", "indexed", "error", "requires_ocr"
+]
+SourceType = Literal["pdf", "docx"]
 
 
 class DocumentOut(BaseModel):
     document_id: UUID
     filename: str
+    source_type: SourceType
     status: DocumentStatus
+    used_ocr: bool
     uploaded_at: datetime
     page_count: int | None = None
     chunk_count: int | None = None

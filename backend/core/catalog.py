@@ -1,10 +1,16 @@
+"""Postgres catalog: document lifecycle and queries.
+
+Keeps SQL co-located so the schema is easy to audit. Module-level pool is
+opened lazily and reused.
+"""
+from __future__ import annotations
+
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Iterator
 from uuid import UUID
 
-from psycopg_pool import ConnectionPool
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from backend.settings import settings
 
@@ -16,8 +22,8 @@ def get_pool() -> ConnectionPool:
     if _pool is None:
         _pool = ConnectionPool(
             conninfo=settings.database_url,
-            min_size=1,
-            max_size=8,
+            min_size=settings.db_pool_min_size,
+            max_size=settings.db_pool_max_size,
             kwargs={"row_factory": dict_row},
             open=True,
         )
@@ -26,24 +32,41 @@ def get_pool() -> ConnectionPool:
 
 @contextmanager
 def conn() -> Iterator:
-    pool = get_pool()
-    with pool.connection() as c:
+    with get_pool().connection() as c:
         yield c
 
 
-def insert_document(
-    *, filename: str, sha256: str, storage_path: str
-) -> UUID:
+# ── inserts ─────────────────────────────────────────────────────────────────
+
+
+def insert_document_with_id(
+    *,
+    document_id: UUID,
+    filename: str,
+    sha256: str,
+    storage_path: str,
+    source_type: str,
+) -> None:
+    """Inserts a row using an app-generated UUID."""
     with conn() as c:
-        row = c.execute(
-            """
-            INSERT INTO documents (filename, sha256, status, storage_path)
-            VALUES (%s, %s, 'pending', %s)
-            RETURNING document_id
-            """,
-            (filename, sha256, storage_path),
-        ).fetchone()
-        return row["document_id"]
+        c.execute(
+            "INSERT INTO documents "
+            "(document_id, filename, sha256, source_type, status, storage_path) "
+            "VALUES (%s, %s, %s, %s, 'pending', %s)",
+            (document_id, filename, sha256, source_type, storage_path),
+        )
+
+
+def mark_used_ocr(document_id: UUID) -> None:
+    """Idempotent flag set when a document goes through OCR."""
+    with conn() as c:
+        c.execute(
+            "UPDATE documents SET used_ocr = TRUE WHERE document_id = %s",
+            (document_id,),
+        )
+
+
+# ── reads ───────────────────────────────────────────────────────────────────
 
 
 def find_by_sha256(sha256: str) -> dict | None:
@@ -81,6 +104,9 @@ def count_indexed() -> int:
             "SELECT COUNT(*) AS n FROM documents WHERE status = 'indexed'"
         ).fetchone()
         return int(row["n"])
+
+
+# ── writes ──────────────────────────────────────────────────────────────────
 
 
 def update_status(

@@ -194,11 +194,11 @@ function MessageView({ m }: { m: Message }) {
               href={fileUrl(c.document_id)}
               target="_blank"
               rel="noreferrer"
-              className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--color-rule)] bg-[var(--color-paper)] px-3 py-1 text-[12.5px] text-[var(--color-ink-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
+              className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--color-rule)] bg-[var(--color-paper)] px-3 py-1 text-[12.5px] text-[var(--color-accent)] hover:border-[var(--color-accent)] hover:bg-[color-mix(in_oklab,var(--color-accent)_8%,transparent)] transition-colors"
             >
               <FileText className="h-3 w-3" strokeWidth={1.7} />
-              <span>{c.filename}</span>
-              <span className="text-[var(--color-ink-soft)] group-hover:text-[var(--color-accent)]">· pág. {c.page}</span>
+              <span className="font-medium">{c.filename}</span>
+              <span className="text-[var(--color-ink-soft)]">· pág. {c.page}</span>
             </a>
           ))}
         </div>

@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import type { DocumentOut } from '../types'
 import { StatusBadge } from './StatusBadge'
+import { SourceTypeBadge } from './SourceTypeBadge'
+import { OcrMarker } from './OcrMarker'
 import { formatDate } from '../lib/utils'
 import { deleteDocument, fileUrl } from '../lib/api'
 
-type SortKey = 'filename' | 'status' | 'uploaded_at'
+type SortKey = 'filename' | 'source_type' | 'status' | 'uploaded_at'
 
 export function DocumentsTable({
   documents,
@@ -67,6 +69,9 @@ export function DocumentsTable({
             <Th onClick={() => toggleSort('filename')} active={sortKey === 'filename'} asc={sortAsc}>
               Archivo
             </Th>
+            <Th onClick={() => toggleSort('source_type')} active={sortKey === 'source_type'} asc={sortAsc}>
+              Tipo
+            </Th>
             <Th onClick={() => toggleSort('status')} active={sortKey === 'status'} asc={sortAsc}>
               Estado
             </Th>
@@ -82,20 +87,24 @@ export function DocumentsTable({
           {sorted.map((d) => (
             <tr key={d.document_id} className="hover:bg-[var(--color-paper-soft)] transition-colors">
               <td className="px-4 py-3">
-                <a
-                  href={fileUrl(d.document_id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-medium text-[var(--color-ink)] hover:text-[var(--color-accent)]"
-                >
-                  {d.filename}
-                </a>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href={fileUrl(d.document_id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-[var(--color-accent)] underline-offset-2 hover:underline hover:text-[var(--color-accent-hover)]"
+                  >
+                    {d.filename}
+                  </a>
+                  {d.used_ocr && <OcrMarker />}
+                </div>
                 {d.error_message && (
                   <div className="mt-0.5 text-[12px] text-[var(--color-ink-muted)]">
                     {d.error_message}
                   </div>
                 )}
               </td>
+              <td className="px-4 py-3"><SourceTypeBadge source={d.source_type} /></td>
               <td className="px-4 py-3"><StatusBadge status={d.status} /></td>
               <td className="px-4 py-3 text-right tabular-nums text-[var(--color-ink-muted)]">
                 {d.page_count ?? '—'}

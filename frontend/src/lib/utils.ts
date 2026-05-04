@@ -14,6 +14,7 @@ export function statusLabel(s: string): string {
     {
       pending: 'Pendiente',
       processing: 'Procesando',
+      ocr_processing: 'OCR en proceso',
       indexed: 'Indexado',
       error: 'Error',
       requires_ocr: 'Requiere OCR',

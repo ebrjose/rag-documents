@@ -15,6 +15,7 @@ dependencies = [
     "pymupdf>=1.25",
     "python-dotenv>=1.0",
     "structlog>=25.1",
+    "surya-ocr>=0.13",
 ]
 
 [tool.uv]

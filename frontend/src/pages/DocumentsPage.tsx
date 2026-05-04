@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { DocumentOut } from '../types'
+import type { DocumentOut, DocumentStatus } from '../types'
 import { listDocuments } from '../lib/api'
 import { Uploader } from '../components/Uploader'
 import { DocumentsTable } from '../components/DocumentsTable'
+
+const POLLING_INTERVAL_MS = 2000
+const IN_PROGRESS_STATUSES = new Set<DocumentStatus>([
+  'pending',
+  'processing',
+  'ocr_processing',
+])
 
 export function DocumentsPage() {
   const [docs, setDocs] = useState<DocumentOut[]>([])
@@ -22,13 +29,11 @@ export function DocumentsPage() {
     refresh()
   }, [refresh])
 
-  // Polling automático mientras haya pending/processing
+  // Polling automático mientras algún documento esté en algún paso del pipeline
   useEffect(() => {
-    const inFlight = docs.some(
-      (d) => d.status === 'pending' || d.status === 'processing'
-    )
+    const inFlight = docs.some((d) => IN_PROGRESS_STATUSES.has(d.status))
     if (!inFlight) return
-    const id = setInterval(refresh, 2000)
+    const id = setInterval(refresh, POLLING_INTERVAL_MS)
     return () => clearInterval(id)
   }, [docs, refresh])
 

@@ -1,4 +1,6 @@
 services:
+  # ── Servicios de datos (siempre arrancan con `docker compose up -d`) ──
+
   postgres:
     image: postgres:16-alpine
     container_name: rag-da-postgres
@@ -27,3 +29,103 @@ services:
       - ./volumes/qdrant:/qdrant/storage
     environment:
       QDRANT__LOG_LEVEL: INFO
+
+  # ── App en modo dev (perfil `app`: hot-reload, dos servicios separados) ──
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: base
+    image: rag-da-backend:latest
+    container_name: rag-da-backend
+    profiles: [app]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_LLM_MODEL: gpt-oss:20b
+      DATABASE_URL: postgresql://rag:rag@postgres:5432/rag_da
+      QDRANT_URL: http://qdrant:6333
+      UPLOADS_DIR: /app/volumes/uploads
+      OCR_DEVICE: cuda
+    volumes:
+      - ./volumes/uploads:/app/volumes/uploads
+      - ./volumes/surya:/root/.cache/datalab
+      - ./volumes/huggingface:/root/.cache/huggingface
+      - ./volumes/torch:/root/.cache/torch
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    image: rag-da-frontend:latest
+    container_name: rag-da-frontend
+    profiles: [app]
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+
+  # ── App en modo prod (perfil `prod`: una sola imagen sirve API + SPA) ──
+
+  backend-prod:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: prod
+    image: rag-da-backend:prod
+    container_name: rag-da-backend-prod
+    profiles: [prod]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_LLM_MODEL: gpt-oss:20b
+      DATABASE_URL: postgresql://rag:rag@postgres:5432/rag_da
+      QDRANT_URL: http://qdrant:6333
+      UPLOADS_DIR: /app/volumes/uploads
+      OCR_DEVICE: cuda
+      STATIC_DIR: /app/static
+    volumes:
+      - ./volumes/uploads:/app/volumes/uploads
+      - ./volumes/surya:/root/.cache/datalab
+      - ./volumes/huggingface:/root/.cache/huggingface
+      - ./volumes/torch:/root/.cache/torch
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
