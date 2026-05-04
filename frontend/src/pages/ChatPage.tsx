@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, FileText, Sparkles } from 'lucide-react'
 import type { Citation, DocumentOut } from '../types'
 import { fileUrl, listDocuments, streamChat } from '../lib/api'
+import { MarkdownContent } from '../components/MarkdownContent'
 
 const SUGGESTIONS = [
   '¿Qué establece la disposición sobre viáticos para viajes de servicio?',
@@ -182,9 +183,11 @@ function MessageView({ m }: { m: Message }) {
   }
   return (
     <div className="space-y-2">
-      <div className="whitespace-pre-wrap text-[15.5px] leading-relaxed text-[var(--color-ink)]">
-        {m.text}
-        {m.streaming && <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-[var(--color-ink-soft)] align-middle" />}
+      <div className="text-[var(--color-ink)]">
+        <MarkdownContent>{m.text}</MarkdownContent>
+        {m.streaming && (
+          <span className="ml-0.5 inline-block h-4 w-2 animate-pulse bg-[var(--color-ink-soft)] align-middle" />
+        )}
       </div>
       {m.citations.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-2">
